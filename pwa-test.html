@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PWA Test - Timiza Youth Initiative</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#007B5F">
+    <style>
+        body {
+            font-family: 'Poppins', Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f8fafc;
+        }
+        .test-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 10px 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .success { background: #d1fae5; color: #065f46; }
+        .error { background: #fee2e2; color: #991b1b; }
+        .warning { background: #fef3c7; color: #92400e; }
+        button {
+            background: #007B5F;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #005a47; }
+    </style>
+</head>
+<body>
+    <h1>🔧 PWA Diagnostics - Timiza Youth Initiative</h1>
+    
+    <div class="test-card">
+        <h2>Service Worker Status</h2>
+        <div id="sw-status" class="status">Checking...</div>
+        <button onclick="checkServiceWorker()">Refresh Check</button>
+    </div>
+    
+    <div class="test-card">
+        <h2>Manifest Status</h2>
+        <div id="manifest-status" class="status">Checking...</div>
+        <button onclick="checkManifest()">Check Manifest</button>
+    </div>
+    
+    <div class="test-card">
+        <h2>Install Prompt</h2>
+        <div id="install-status" class="status">Waiting for prompt...</div>
+        <button id="install-btn" onclick="installPWA()" disabled>Install App</button>
+    </div>
+    
+    <div class="test-card">
+        <h2>Cache Status</h2>
+        <div id="cache-status" class="status">Checking...</div>
+        <button onclick="checkCache()">Check Cache</button>
+    </div>
+    
+    <div class="test-card">
+        <h2>Network Status</h2>
+        <div id="network-status" class="status">Online</div>
+    </div>
+    
+    <div class="test-card">
+        <a href="index.php" style="background: #007B5F; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">← Back to Main Site</a>
+    </div>
+
+    <script>
+        let deferredPrompt;
+        
+        // Check Service Worker
+        function checkServiceWorker() {
+            const status = document.getElementById('sw-status');
+            
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistration()
+                    .then(registration => {
+                        if (registration) {
+                            status.className = 'status success';
+                            status.innerHTML = '✅ Service Worker registered and active<br>Scope: ' + registration.scope;
+                        } else {
+                            status.className = 'status warning';
+                            status.innerHTML = '⚠️ Service Worker not registered. Attempting registration...';
+                            
+                            navigator.serviceWorker.register('service-worker.js')
+                                .then(reg => {
+                                    status.className = 'status success';
+                                    status.innerHTML = '✅ Service Worker registered successfully!';
+                                })
+                                .catch(err => {
+                                    status.className = 'status error';
+                                    status.innerHTML = '❌ Service Worker registration failed: ' + err.message;
+                                });
+                        }
+                    });
+            } else {
+                status.className = 'status error';
+                status.innerHTML = '❌ Service Workers not supported in this browser';
+            }
+        }
+        
+        // Check Manifest
+        function checkManifest() {
+            const status = document.getElementById('manifest-status');
+            
+            fetch('manifest.json')
+                .then(response => response.json())
+                .then(manifest => {
+                    status.className = 'status success';
+                    status.innerHTML = `✅ Manifest loaded successfully<br>
+                        Name: ${manifest.name}<br>
+                        Short Name: ${manifest.short_name}<br>
+                        Icons: ${manifest.icons.length} found<br>
+                        Display: ${manifest.display}`;
+                })
+                .catch(err => {
+                    status.className = 'status error';
+                    status.innerHTML = '❌ Manifest loading failed: ' + err.message;
+                });
+        }
+        
+        // Check Cache
+        function checkCache() {
+            const status = document.getElementById('cache-status');
+            
+            if ('caches' in window) {
+                caches.keys().then(cacheNames => {
+                    const timizaCaches = cacheNames.filter(name => name.includes('timiza'));
+                    if (timizaCaches.length > 0) {
+                        status.className = 'status success';
+                        status.innerHTML = `✅ Cache found: ${timizaCaches.join(', ')}`;
+                        
+                        // Check cache contents
+                        caches.open(timizaCaches[0]).then(cache => {
+                            cache.keys().then(requests => {
+                                status.innerHTML += `<br>Cached files: ${requests.length}`;
+                            });
+                        });
+                    } else {
+                        status.className = 'status warning';
+                        status.innerHTML = '⚠️ No Timiza caches found';
+                    }
+                });
+            } else {
+                status.className = 'status error';
+                status.innerHTML = '❌ Cache API not supported';
+            }
+        }
+        
+        // Install PWA
+        function installPWA() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    const status = document.getElementById('install-status');
+                    if (choiceResult.outcome === 'accepted') {
+                        status.className = 'status success';
+                        status.innerHTML = '✅ App installation accepted!';
+                    } else {
+                        status.className = 'status warning';
+                        status.innerHTML = '⚠️ App installation dismissed';
+                    }
+                    deferredPrompt = null;
+                    document.getElementById('install-btn').disabled = true;
+                });
+            }
+        }
+        
+        // Network status
+        function updateNetworkStatus() {
+            const status = document.getElementById('network-status');
+            if (navigator.onLine) {
+                status.className = 'status success';
+                status.innerHTML = '✅ Online';
+            } else {
+                status.className = 'status error';
+                status.innerHTML = '❌ Offline';
+            }
+        }
+        
+        // Event listeners
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            document.getElementById('install-btn').disabled = false;
+            document.getElementById('install-status').innerHTML = '📱 Install prompt available!';
+            document.getElementById('install-status').className = 'status success';
+        });
+        
+        window.addEventListener('appinstalled', (evt) => {
+            document.getElementById('install-status').innerHTML = '✅ App installed successfully!';
+            document.getElementById('install-status').className = 'status success';
+        });
+        
+        window.addEventListener('online', updateNetworkStatus);
+        window.addEventListener('offline', updateNetworkStatus);
+        
+        // Initialize checks
+        document.addEventListener('DOMContentLoaded', function() {
+            checkServiceWorker();
+            checkManifest();
+            checkCache();
+            updateNetworkStatus();
+        });
+    </script>
+</body>
+</html>
